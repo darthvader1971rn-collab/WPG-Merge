@@ -1,0 +1,5 @@
+# Polskie EPG
+https://raw.githubusercontent.com/darthvader1971rn-collab/Play_EPG/refs/heads/main/releases/epg.xml
+
+# Amerykańskie EPG (odfiltrowane kanały)
+https://raw.githubusercontent.com/darthvader1971rn-collab/EPG-US/main/epg_usa.xml.gz
