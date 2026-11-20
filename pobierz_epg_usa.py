@@ -65,17 +65,31 @@ def format_xmltv_time(dt: datetime) -> str:
 
 
 def fetch_station_day(session: requests.Session, station_url: str, date_str: str):
-    if not hasattr(session, "_ip_tz"):
-        detected_tz = None
+    if not hasattr(session, "_ny_offset_hours"):
+        anchors = {
+            "CBS News New York 11pm": 23,
+            "CBS News New York 6pm": 18,
+            "CBS News New York 5pm": 17,
+            "CBS News New York 12pm": 12,
+        }
+        offset_h = 0
         try:
-            tz_resp = session.get("http://ip-api.com/json/?fields=timezone", timeout=10)
-            tz_name = tz_resp.json().get("timezone")
-            if tz_name:
-                detected_tz = ZoneInfo(tz_name)
-                print(f"Wykryta strefa czasowa IP: {tz_name}")
-        except Exception:
-            pass
-        session._ip_tz = detected_tz or datetime.now().astimezone().tzinfo
+            cal_url = f"https://www.tvpassport.com/tv-listings/stations/cbs-wcbs-new-york-ny/1766/{date_str}"
+            cal_resp = session.get(cal_url, headers=HEADERS, timeout=20)
+            cal_resp.raise_for_status()
+            cal_soup = BeautifulSoup(cal_resp.text, "html.parser")
+            for item in cal_soup.select("div.list-group-item[data-st]"):
+                t = item.get("data-showname", "").strip()
+                st = item.get("data-st", "").strip()
+                if t in anchors and st:
+                    actual_h = datetime.strptime(st, "%Y-%m-%d %H:%M:%S").hour
+                    expected_h = anchors[t]
+                    offset_h = (expected_h - actual_h + 12) % 24 - 12
+                    print(f"Skalibrowano TV Passport -> NY ({t}): {offset_h:+d}h")
+                    break
+        except Exception as exc:
+            print(f"[UWAGA] Błąd kalibracji strefy: {exc}")
+        session._ny_offset_hours = offset_h
 
     url = f"{station_url}/{date_str}"
     resp = session.get(url, headers=HEADERS, timeout=20)
@@ -95,14 +109,14 @@ def fetch_station_day(session: requests.Session, station_url: str, date_str: str
 
         try:
             start_naive = datetime.strptime(st_raw, "%Y-%m-%d %H:%M:%S")
-            start_local = start_naive.replace(tzinfo=session._ip_tz)
+            start_ny = (start_naive + timedelta(hours=session._ny_offset_hours)).replace(tzinfo=TZ_NY)
             duration_min = int(dur_raw) if dur_raw.isdigit() else 30
-            stop_local = start_local + timedelta(minutes=duration_min)
+            stop_ny = start_ny + timedelta(minutes=duration_min)
         except ValueError:
             continue
 
-        start_pl = start_local.astimezone(TZ_PL)
-        stop_pl = stop_local.astimezone(TZ_PL)
+        start_pl = start_ny.astimezone(TZ_PL)
+        stop_pl = stop_ny.astimezone(TZ_PL)
 
         programs.append({
             "start": start_pl,
