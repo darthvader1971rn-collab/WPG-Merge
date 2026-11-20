@@ -65,6 +65,18 @@ def format_xmltv_time(dt: datetime) -> str:
 
 
 def fetch_station_day(session: requests.Session, station_url: str, date_str: str):
+    if not hasattr(session, "_ip_tz"):
+        detected_tz = None
+        try:
+            tz_resp = session.get("http://ip-api.com/json/?fields=timezone", timeout=10)
+            tz_name = tz_resp.json().get("timezone")
+            if tz_name:
+                detected_tz = ZoneInfo(tz_name)
+                print(f"Wykryta strefa czasowa IP: {tz_name}")
+        except Exception:
+            pass
+        session._ip_tz = detected_tz or datetime.now().astimezone().tzinfo
+
     url = f"{station_url}/{date_str}"
     resp = session.get(url, headers=HEADERS, timeout=20)
     resp.raise_for_status()
@@ -72,7 +84,6 @@ def fetch_station_day(session: requests.Session, station_url: str, date_str: str
     soup = BeautifulSoup(resp.text, "html.parser")
     items = soup.select("div.list-group-item[data-st]")
     programs = []
-    local_tz = datetime.now().astimezone().tzinfo
 
     for item in items:
         st_raw = item.get("data-st", "").strip()
@@ -84,7 +95,7 @@ def fetch_station_day(session: requests.Session, station_url: str, date_str: str
 
         try:
             start_naive = datetime.strptime(st_raw, "%Y-%m-%d %H:%M:%S")
-            start_local = start_naive.replace(tzinfo=local_tz)
+            start_local = start_naive.replace(tzinfo=session._ip_tz)
             duration_min = int(dur_raw) if dur_raw.isdigit() else 30
             stop_local = start_local + timedelta(minutes=duration_min)
         except ValueError:
