@@ -21,6 +21,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 tzdata
+
+      - name: Fetch 7-day USA EPG
+        run: python pobierz_epg_usa.py
+
       - name: Merge EPG sources
         run: python merge_epg.py
 

@@ -27,6 +27,13 @@ def is_gzip_file(path: Path) -> bool:
 
 
 def download_file(url: str, dest: Path):
+    if not url.startswith(("http://", "https://")):
+        local_src = Path(url)
+        if not local_src.exists():
+            raise FileNotFoundError(f"Brak lokalnego pliku źródłowego: {local_src}")
+        shutil.copyfile(local_src, dest)
+        return
+
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=180) as resp, open(dest, "wb") as out:
         shutil.copyfileobj(resp, out)
